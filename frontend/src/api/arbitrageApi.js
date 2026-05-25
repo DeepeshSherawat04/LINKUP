@@ -1,11 +1,10 @@
-// api/arbitrageApi.js
-import { supabaseClient } from '../config/supabaseClient';
+import { supabase } from '../config/supabaseClient';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 class ArbitrageApi {
   async getHeaders() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     return {
       'Content-Type': 'application/json',
       'Authorization': session ? `Bearer ${session.access_token}` : ''
