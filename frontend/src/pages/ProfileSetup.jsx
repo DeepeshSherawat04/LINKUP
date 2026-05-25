@@ -1,4 +1,3 @@
-// frontend/src/pages/ProfileSetup.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -23,7 +22,6 @@ const ProfileSetup = () => {
   const [aiError, setAiError] = useState('');
   const [saveError, setSaveError] = useState('');
 
-  // Auto-fill email from Google if available
   useEffect(() => {
     if (user?.email && !form.email) {
       // User is logged in via Google
@@ -33,41 +31,52 @@ const ProfileSetup = () => {
   const handleGoogleSignIn = async () => {
     try {
       await signInWithGoogle();
-      // Redirect happens via OAuth callback
     } catch (err) {
       console.error('Google sign-in error:', err);
     }
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!user) {
-    setSaveError('Please sign in first');
-    return;
-  }
-  setSaving(true);
-  setSaveError('');
-  try {
-    await profileApiClient.saveProfile({
-      goal_type: form.goal_type,
-      location: form.location,
-      time_per_week: form.time_per_week
-    });
-    
-    const allSkills = [
-      ...extractedSkills,
-      ...manualSkills.split(',').map(s => s.trim()).filter(Boolean)
-    ];
-    if (allSkills.length > 0) {
-      await profileApiClient.saveSkills(allSkills);
+    e.preventDefault();
+    if (!user) {
+      setSaveError('Please sign in first');
+      return;
     }
-    navigate('/');
-  } catch (err) {
-    setSaveError(err.response?.data?.message || 'Failed to save profile');
-  } finally {
-    setSaving(false);
-  }
-};
+
+    setSaving(true);
+    setSaveError('');
+
+    try {
+      // Merge extracted + manual skills into a single deduplicated array
+      const allSkills = [
+        ...extractedSkills,
+        ...manualSkills.split(',').map(s => s.trim()).filter(Boolean)
+      ].filter((skill, index, self) => self.indexOf(skill) === index);
+
+      // Single atomic save — profile + skills in one request
+      await profileApiClient.saveProfile({
+        goal_type: form.goal_type,
+        location: form.location,
+        time_per_week: form.time_per_week,
+        skills: allSkills
+      });
+
+      navigate('/');
+    } catch (err) {
+      let msg = 'Failed to save profile';
+
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        msg = 'Server timeout. The backend may be waking up — please try again in 30 seconds.';
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      }
+
+      setSaveError(msg);
+      console.error('Profile save error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleExtractSkills = async () => {
     if (!resumeText.trim()) return;
@@ -77,7 +86,6 @@ const ProfileSetup = () => {
       const res = await opportunityApi.parseResume(resumeText);
       setExtractedSkills(res.data.data.skills || []);
     } catch (err) {
-      // Show actual backend error message instead of generic text
       const msg = err.response?.data?.error?.message 
         || err.response?.data?.message 
         || 'AI extraction failed. Add skills manually.';
@@ -89,7 +97,6 @@ const ProfileSetup = () => {
 
   if (authLoading) return <LoadingSpinner />;
 
-  // ─── NOT LOGGED IN: Show Google Sign In ───
   if (!user) {
     return (
       <div className="max-w-md mx-auto p-6 space-y-8">
@@ -99,7 +106,6 @@ const ProfileSetup = () => {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 space-y-6">
-          {/* Google Sign In Button */}
           <button
             onClick={handleGoogleSignIn}
             className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm"
@@ -131,7 +137,6 @@ const ProfileSetup = () => {
     );
   }
 
-  // ─── LOGGED IN: Show Profile Form ───
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-8">
       <div className="flex items-center justify-between">
@@ -206,6 +211,15 @@ const ProfileSetup = () => {
             placeholder="React, Node.js, Python, SEO..."
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
           />
+          {extractedSkills.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {extractedSkills.map((skill, i) => (
+                <span key={i} className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded text-xs font-medium border border-purple-200">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {saveError && (
@@ -250,7 +264,7 @@ const ProfileSetup = () => {
 
         {extractedSkills.length > 0 && (
           <div className="pt-2">
-            <p className="text-sm font-medium text-gray-700 mb-2">Extraacted Skills:</p>
+            <p className="text-sm font-medium text-gray-700 mb-2">Extracted Skills:</p>
             <div className="flex flex-wrap gap-2">
               {extractedSkills.map((skill, i) => (
                 <span key={i} className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-sm font-medium border border-purple-200">

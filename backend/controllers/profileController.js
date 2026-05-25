@@ -1,4 +1,4 @@
-// backend/controllers/profileController.js
+// profileController.js
 const userModel = require('../models/userModel');
 const scoringService = require('../services/scoringService');
 
@@ -25,7 +25,23 @@ exports.getProfile = async (req, res, next) => {
 
 exports.updateProfile = async (req, res, next) => {
   try {
-    const user = await userModel.update(req.user.id, req.body);
+    const updateData = { ...req.body };
+
+    // Normalize skills to an array if provided (handles both string and array inputs)
+    if (updateData.skills !== undefined) {
+      if (Array.isArray(updateData.skills)) {
+        updateData.skills = updateData.skills.map(s => s.trim()).filter(Boolean);
+      } else if (typeof updateData.skills === 'string') {
+        updateData.skills = updateData.skills
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+      } else {
+        updateData.skills = [];
+      }
+    }
+
+    const user = await userModel.update(req.user.id, updateData);
     
     // 🔥 NON-BLOCKING: don't let Redis stall the HTTP response
     safeCacheInvalidate(req.user.id);
@@ -38,7 +54,13 @@ exports.updateProfile = async (req, res, next) => {
 
 exports.updateSkills = async (req, res, next) => {
   try {
-    const user = await userModel.update(req.user.id, { skills: req.body.skills });
+    let skills = req.body.skills || [];
+    
+    if (typeof skills === 'string') {
+      skills = skills.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    
+    const user = await userModel.update(req.user.id, { skills });
     
     // 🔥 NON-BLOCKING
     safeCacheInvalidate(req.user.id);
