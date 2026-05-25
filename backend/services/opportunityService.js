@@ -8,7 +8,7 @@ const CACHE_KEY = 'opportunities:all';
 const CACHE_TTL = 300; // 5 minutes
 
 /**
- * Get all opportunities with caching and quality enforcement
+ * Get all opportunities with caching aplancontrnd quality enforcement
  * Priority 1: Ensures high-quality, future-focused dataset
  */
 exports.getAllWithCache = async () => {

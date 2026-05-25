@@ -4,89 +4,99 @@ const CostOfLivingService = require('./costOfLivingService');
 
 class IncomeSimulationService {
   static async buildScenarios(offerDetails, personalFinances) {
-    this._validateInputs(offerDetails, personalFinances);
+    // 1. Sanitize instead of throwing — handles both opportunity & offer shapes
+    const inputs = this._sanitizeInputs(offerDetails, personalFinances);
 
-    const baseAnnual = FinancialMath.toCents(offerDetails.base_salary);
-    const equityPct = parseFloat(offerDetails.equity_percentage) || 0;
-    const equityValuation = FinancialMath.toCents(offerDetails.equity_valuation || 0);
-    const bonusTarget = FinancialMath.toCents(offerDetails.bonus_target_annual || 0);
-    const location = offerDetails.location || 'Remote';
-    const locationCountry = offerDetails.location_country || null;
-    const companyType = offerDetails.company_type || 'startup';
-    const companyName = offerDetails.company_name || 'Unknown';
+    // 2. Safe CoL fetch with fallback defaults
+    let col = null;
+    try {
+      col = await CostOfLivingService.getCostOfLiving(inputs.location, inputs.locationCountry);
+    } catch (e) {
+      console.warn('[IncomeSimulation] CoL fetch failed, using defaults:', e.message);
+    }
 
-    const rent = FinancialMath.toCents(personalFinances.monthly_rent || 0);
-    const loans = FinancialMath.toCents(personalFinances.monthly_loans || 0);
-    const expenses = FinancialMath.toCents(personalFinances.monthly_expenses || 0);
-    const savings = FinancialMath.toCents(personalFinances.savings || 0);
-    const hasRelocation = !!personalFinances.relocation_bonus;
-    const relocationClawbackMonths = parseInt(personalFinances.relocation_clawback_months) || 0;
-    const hasSeverance = !!personalFinances.severance_months;
+    const monthlyFixed = this._calculateMonthlyFixed(inputs, col);
+    const taxRate = (col && typeof col.tax_rate === 'number') ? col.tax_rate : 0.30;
+    const marketRate = this._getMarketRate(inputs.location, col);
 
-    // === LIVE DATA FETCH ===
-    const col = await CostOfLivingService.getCostOfLiving(location, locationCountry);
-    
-    const liveRent = col ? col.rent_1br_cents : rent;
-    const liveTaxRate = col ? col.tax_rate : 0.30;
-    const liveMarketAdjustment = col ? col.market_adjustment : 1.0;
-
-    const effectiveRent = rent > 0 ? rent : liveRent;
-    const monthlyFixed = effectiveRent + loans + expenses;
-
-    const startup = this._buildStartupScenario(
-      baseAnnual, equityPct, equityValuation, bonusTarget, location, companyName,
-      monthlyFixed, savings, hasRelocation, relocationClawbackMonths, hasSeverance,
-      liveTaxRate, liveMarketAdjustment, col
-    );
-
-    const bigTech = this._buildBigTechScenario(
-      baseAnnual, equityPct, equityValuation, bonusTarget, location, companyName,
-      monthlyFixed, savings, hasRelocation, relocationClawbackMonths, hasSeverance,
-      liveTaxRate, liveMarketAdjustment, col
-    );
-
-    const remote = this._buildRemoteScenario(
-      baseAnnual, equityPct, equityValuation, bonusTarget, location, companyName,
-      monthlyFixed, savings, hasRelocation, relocationClawbackMonths, hasSeverance,
-      liveTaxRate, liveMarketAdjustment, col
-    );
+    // 3. Build canonical scenarios (same shape the frontend expects)
+    const startup = this._buildStartupScenario(inputs, monthlyFixed, taxRate, marketRate, col);
+    const bigTech = this._buildBigTechScenario(inputs, monthlyFixed, taxRate, marketRate, col);
+    const remote = this._buildRemoteScenario(inputs, monthlyFixed, taxRate, marketRate, col);
 
     return [startup, bigTech, remote];
   }
 
-  static _buildStartupScenario(baseAnnual, equityPct, equityValuation, bonusTarget, location, companyName,
-    monthlyFixed, savings, hasRelocation, relocationClawbackMonths, hasSeverance,
-    taxRate, marketAdjustment, colData) {
-    
-    const monthlyBase = FinancialMath.monthlyFromAnnual(baseAnnual);
-    const monthlyBonus = FinancialMath.monthlyFromAnnual(bonusTarget * 0.5);
-    const equityAnnual = FinancialMath.percentOf(equityValuation, equityPct / 100);
+  /* =====================================================================
+     INPUT SANITIZATION — replaces the old _validateInputs that threw 500s
+     ===================================================================== */
+  static _sanitizeInputs(offer, finances) {
+    // Detect opportunity shape vs job-offer shape
+    const isOpportunity = !!(offer?.incomePotential || offer?.requiredSkills);
+
+    // Income: use base_salary if present, otherwise fall back to incomePotential
+    const rawBase = parseFloat(offer?.base_salary || offer?.incomePotential?.min || offer?.incomePotential?.max || 60000);
+    const rawMax = parseFloat(offer?.incomePotential?.max || rawBase * 1.5);
+
+    return {
+      baseAnnual: Math.max(FinancialMath.toCents(rawBase), 100000),   // min $1k/yr in cents
+      maxAnnual: Math.max(FinancialMath.toCents(rawMax), 100000),
+      equityPct: parseFloat(offer?.equity_percentage || 0),
+      equityValuation: FinancialMath.toCents(offer?.equity_valuation || 0),
+      bonusTarget: FinancialMath.toCents(offer?.bonus_target_annual || 0),
+      location: (offer?.location || 'Remote').toString(),
+      locationCountry: offer?.location_country || null,
+      companyType: (offer?.company_type || 'startup').toString(),
+      companyName: (offer?.company_name || offer?.title || 'Unknown Opportunity').toString(),
+
+      rent: FinancialMath.toCents(finances?.monthly_rent || 0),
+      loans: FinancialMath.toCents(finances?.monthly_loans || 0),
+      expenses: FinancialMath.toCents(finances?.monthly_expenses || 0),
+      savings: FinancialMath.toCents(finances?.savings || 0),
+      hasRelocation: !!(finances?.relocation_bonus || offer?.relocation_bonus),
+      relocationClawbackMonths: parseInt(finances?.relocation_clawback_months || offer?.relocation_clawback_months) || 0,
+      hasSeverance: !!(finances?.severance_months || offer?.severance_months),
+    };
+  }
+
+  static _calculateMonthlyFixed(inputs, col) {
+    const liveRent = col && typeof col.rent_1br_cents === 'number' ? col.rent_1br_cents : 0;
+    const effectiveRent = inputs.rent > 0 ? inputs.rent : (liveRent || FinancialMath.toCents(1000));
+    return effectiveRent + inputs.loans + inputs.expenses;
+  }
+
+  /* =====================================================================
+     SCENARIO BUILDERS (kept identical schema so the frontend doesn't break)
+     ===================================================================== */
+  static _buildStartupScenario(inputs, monthlyFixed, taxRate, marketRate, col) {
+    const monthlyBase = FinancialMath.monthlyFromAnnual(inputs.baseAnnual);
+    const monthlyBonus = FinancialMath.monthlyFromAnnual(inputs.bonusTarget * 0.5);
+    const equityAnnual = FinancialMath.percentOf(inputs.equityValuation, inputs.equityPct / 100);
     const equityWorth = FinancialMath.percentOf(equityAnnual, 0.10);
     const monthlyEquity = FinancialMath.monthlyFromAnnual(equityWorth);
 
     const projection = [];
-    let currentSavings = savings;
+    let currentSavings = inputs.savings;
     let breakEvenMonth = null;
     const LAYOFF_MONTH = 18;
-    const SEVERANCE_MONTHS = hasSeverance ? 2 : 0;
+    const SEVERANCE_MONTHS = inputs.hasSeverance ? 2 : 0;
 
     for (let month = 1; month <= 24; month++) {
       let income = monthlyBase + monthlyBonus;
       if (month > 12) income += monthlyEquity;
-      
       if (month === LAYOFF_MONTH) income += monthlyBase * SEVERANCE_MONTHS;
       if (month > LAYOFF_MONTH) income = 0;
 
       let clawback = 0;
-      if (hasRelocation && month < relocationClawbackMonths && month === LAYOFF_MONTH) {
+      if (inputs.hasRelocation && month < inputs.relocationClawbackMonths && month === LAYOFF_MONTH) {
         clawback = FinancialMath.toCents(10000);
       }
 
       const tax = FinancialMath.percentOf(income, taxRate);
       const disposable = income - tax - monthlyFixed - clawback;
       currentSavings = FinancialMath.add(currentSavings, disposable);
-      
-      if (breakEvenMonth === null && currentSavings > savings) breakEvenMonth = month;
+
+      if (breakEvenMonth === null && currentSavings > inputs.savings) breakEvenMonth = month;
 
       projection.push({
         month,
@@ -100,27 +110,36 @@ class IncomeSimulationService {
     }
 
     const trapRisk = this._calculateTrapRisk({
-      companyType: 'startup', equityPct, equityIlliquid: true,
-      hasRelocation, relocationClawbackMonths, hasSeverance,
-      baseAnnual, marketRate: this._getMarketRate(location, colData),
-      monthlyFixed, monthlyBase
+      companyType: 'startup',
+      equityPct: inputs.equityPct,
+      equityIlliquid: true,
+      hasRelocation: inputs.hasRelocation,
+      relocationClawbackMonths: inputs.relocationClawbackMonths,
+      hasSeverance: inputs.hasSeverance,
+      baseAnnual: inputs.baseAnnual,
+      marketRate,
+      monthlyFixed,
+      monthlyBase
     });
 
     return {
-      name: `${companyName} (Startup Scenario)`,
+      name: `${inputs.companyName} (Startup Scenario)`,
       type: 'startup',
       projection,
       break_even_month: breakEvenMonth,
       trap_risk_score: trapRisk,
       risk_breakdown: this._getRiskBreakdown(trapRisk),
-      data_source: colData ? { 
-        source: colData.source, 
-        city: colData.city, 
-        country: colData.country,
-        fetched_at: colData.fetched_at,
-        data_quality: colData.data_quality || 'live',
-        note: colData.note
-      } : null,
+      data_source: col ? {
+        source: col.source,
+        city: col.city,
+        country: col.country,
+        fetched_at: col.fetched_at,
+        data_quality: col.data_quality || 'live',
+        note: col.note
+      } : {
+        source: 'fallback',
+        note: 'Cost-of-living service unavailable. Using conservative defaults.'
+      },
       summary: {
         month_6_disposable_cents: projection[5]?.disposable_cents || 0,
         month_12_disposable_cents: projection[11]?.disposable_cents || 0,
@@ -130,17 +149,14 @@ class IncomeSimulationService {
     };
   }
 
-  static _buildBigTechScenario(baseAnnual, equityPct, equityValuation, bonusTarget, location, companyName,
-    monthlyFixed, savings, hasRelocation, relocationClawbackMonths, hasSeverance,
-    taxRate, marketAdjustment, colData) {
-    
-    const monthlyBase = FinancialMath.monthlyFromAnnual(baseAnnual);
-    const monthlyBonus = FinancialMath.monthlyFromAnnual(bonusTarget * 0.85);
-    const equityAnnual = FinancialMath.percentOf(equityValuation, equityPct / 100);
+  static _buildBigTechScenario(inputs, monthlyFixed, taxRate, marketRate, col) {
+    const monthlyBase = FinancialMath.monthlyFromAnnual(inputs.baseAnnual);
+    const monthlyBonus = FinancialMath.monthlyFromAnnual(inputs.bonusTarget * 0.85);
+    const equityAnnual = FinancialMath.percentOf(inputs.equityValuation, inputs.equityPct / 100);
     const monthlyEquity = FinancialMath.monthlyFromAnnual(equityAnnual);
 
     const projection = [];
-    let currentSavings = savings;
+    let currentSavings = inputs.savings;
     let breakEvenMonth = null;
 
     for (let month = 1; month <= 24; month++) {
@@ -151,8 +167,8 @@ class IncomeSimulationService {
       const tax = FinancialMath.percentOf(income, taxRate);
       const disposable = income - tax - monthlyFixed;
       currentSavings = FinancialMath.add(currentSavings, disposable);
-      
-      if (breakEvenMonth === null && currentSavings > savings) breakEvenMonth = month;
+
+      if (breakEvenMonth === null && currentSavings > inputs.savings) breakEvenMonth = month;
 
       projection.push({
         month,
@@ -166,27 +182,36 @@ class IncomeSimulationService {
     }
 
     const trapRisk = this._calculateTrapRisk({
-      companyType: 'big_tech', equityPct, equityIlliquid: false,
-      hasRelocation, relocationClawbackMonths, hasSeverance,
-      baseAnnual, marketRate: this._getMarketRate(location, colData),
-      monthlyFixed, monthlyBase
+      companyType: 'big_tech',
+      equityPct: inputs.equityPct,
+      equityIlliquid: false,
+      hasRelocation: inputs.hasRelocation,
+      relocationClawbackMonths: inputs.relocationClawbackMonths,
+      hasSeverance: inputs.hasSeverance,
+      baseAnnual: inputs.baseAnnual,
+      marketRate,
+      monthlyFixed,
+      monthlyBase
     });
 
     return {
-      name: `${companyName} (Big Tech Scenario)`,
+      name: `${inputs.companyName} (Big Tech Scenario)`,
       type: 'big_tech',
       projection,
       break_even_month: breakEvenMonth,
       trap_risk_score: trapRisk,
       risk_breakdown: this._getRiskBreakdown(trapRisk),
-      data_source: colData ? { 
-        source: colData.source, 
-        city: colData.city, 
-        country: colData.country,
-        fetched_at: colData.fetched_at,
-        data_quality: colData.data_quality || 'live',
-        note: colData.note
-      } : null,
+      data_source: col ? {
+        source: col.source,
+        city: col.city,
+        country: col.country,
+        fetched_at: col.fetched_at,
+        data_quality: col.data_quality || 'live',
+        note: col.note
+      } : {
+        source: 'fallback',
+        note: 'Cost-of-living service unavailable. Using conservative defaults.'
+      },
       summary: {
         month_6_disposable_cents: projection[5]?.disposable_cents || 0,
         month_12_disposable_cents: projection[11]?.disposable_cents || 0,
@@ -196,21 +221,20 @@ class IncomeSimulationService {
     };
   }
 
-  static _buildRemoteScenario(baseAnnual, equityPct, equityValuation, bonusTarget, location, companyName,
-    monthlyFixed, savings, hasRelocation, relocationClawbackMonths, hasSeverance,
-    taxRate, marketAdjustment, colData) {
-    
-    const adjustedBase = FinancialMath.percentOf(baseAnnual, 0.85);
+  static _buildRemoteScenario(inputs, monthlyFixed, taxRate, marketRate, col) {
+    const adjustedBase = FinancialMath.percentOf(inputs.baseAnnual, 0.85);
     const monthlyBase = FinancialMath.monthlyFromAnnual(adjustedBase);
-    const monthlyBonus = FinancialMath.monthlyFromAnnual(bonusTarget * 0.60);
-    const equityAnnual = FinancialMath.percentOf(equityValuation, equityPct / 100);
+    const monthlyBonus = FinancialMath.monthlyFromAnnual(inputs.bonusTarget * 0.60);
+    const equityAnnual = FinancialMath.percentOf(inputs.equityValuation, inputs.equityPct / 100);
     const monthlyEquity = FinancialMath.monthlyFromAnnual(equityAnnual);
 
-    const remoteRent = colData ? Math.round(colData.rent_1br_cents * 0.60) : FinancialMath.toCents(140000);
+    const remoteRent = col && typeof col.rent_1br_cents === 'number'
+      ? Math.round(col.rent_1br_cents * 0.60)
+      : FinancialMath.toCents(1400);
     const remoteMonthlyFixed = remoteRent + (monthlyFixed * 0.4);
 
     const projection = [];
-    let currentSavings = savings;
+    let currentSavings = inputs.savings;
     let breakEvenMonth = null;
 
     for (let month = 1; month <= 24; month++) {
@@ -222,8 +246,8 @@ class IncomeSimulationService {
       const tax = FinancialMath.percentOf(income, remoteTaxRate);
       const disposable = income - tax - remoteMonthlyFixed;
       currentSavings = FinancialMath.add(currentSavings, disposable);
-      
-      if (breakEvenMonth === null && currentSavings > savings) breakEvenMonth = month;
+
+      if (breakEvenMonth === null && currentSavings > inputs.savings) breakEvenMonth = month;
 
       projection.push({
         month,
@@ -237,27 +261,36 @@ class IncomeSimulationService {
     }
 
     const trapRisk = this._calculateTrapRisk({
-      companyType: 'remote', equityPct, equityIlliquid: false,
-      hasRelocation, relocationClawbackMonths, hasSeverance,
-      baseAnnual: adjustedBase, marketRate: this._getMarketRate('Remote', colData),
-      monthlyFixed: remoteMonthlyFixed, monthlyBase
+      companyType: 'remote',
+      equityPct: inputs.equityPct,
+      equityIlliquid: false,
+      hasRelocation: inputs.hasRelocation,
+      relocationClawbackMonths: inputs.relocationClawbackMonths,
+      hasSeverance: inputs.hasSeverance,
+      baseAnnual: adjustedBase,
+      marketRate: this._getMarketRate('Remote', col),
+      monthlyFixed: remoteMonthlyFixed,
+      monthlyBase
     });
 
     return {
-      name: `${companyName} (Remote Scenario)`,
+      name: `${inputs.companyName} (Remote Scenario)`,
       type: 'remote',
       projection,
       break_even_month: breakEvenMonth,
       trap_risk_score: trapRisk,
       risk_breakdown: this._getRiskBreakdown(trapRisk),
-      data_source: colData ? { 
-        source: colData.source, 
-        city: colData.city, 
-        country: colData.country,
-        fetched_at: colData.fetched_at,
-        data_quality: colData.data_quality || 'live',
-        note: colData.note
-      } : null,
+      data_source: col ? {
+        source: col.source,
+        city: col.city,
+        country: col.country,
+        fetched_at: col.fetched_at,
+        data_quality: col.data_quality || 'live',
+        note: col.note
+      } : {
+        source: 'fallback',
+        note: 'Cost-of-living service unavailable. Using conservative defaults.'
+      },
       summary: {
         month_6_disposable_cents: projection[5]?.disposable_cents || 0,
         month_12_disposable_cents: projection[11]?.disposable_cents || 0,
@@ -269,6 +302,7 @@ class IncomeSimulationService {
 
   static _calculateTrapRisk({ companyType, equityPct, equityIlliquid, hasRelocation, relocationClawbackMonths, hasSeverance, baseAnnual, marketRate, monthlyFixed, monthlyBase }) {
     let score = 0;
+
     if (equityIlliquid && equityPct > 1.0) score += 30;
     else if (equityIlliquid && equityPct > 0.5) score += 25;
     else if (equityIlliquid) score += 20;
@@ -282,11 +316,16 @@ class IncomeSimulationService {
     if (!hasSeverance) score += 15;
     else score += 5;
 
-    if (baseAnnual < marketRate * 0.85) score += 15;
-    else if (baseAnnual < marketRate * 0.95) score += 10;
-    else if (baseAnnual < marketRate) score += 5;
+    if (marketRate > 0) {
+      if (baseAnnual < marketRate * 0.85) score += 15;
+      else if (baseAnnual < marketRate * 0.95) score += 10;
+      else if (baseAnnual < marketRate) score += 5;
+    }
 
-    const runwayMonths = monthlyBase > 0 ? Math.floor((monthlyBase * 3) / monthlyFixed) : 0;
+    const runwayMonths = (monthlyBase > 0 && monthlyFixed > 0)
+      ? Math.floor((monthlyBase * 3) / monthlyFixed)
+      : 6;
+
     if (runwayMonths < 3) score += 15;
     else if (runwayMonths < 6) score += 10;
     else if (runwayMonths < 9) score += 5;
@@ -305,35 +344,17 @@ class IncomeSimulationService {
       'San Francisco': 18000000, 'New York': 17500000, 'Seattle': 16000000,
       'Austin': 13000000, 'Remote': 12000000, 'Default': 14000000
     };
-    
-    const key = Object.keys(baseRates).find(k => location?.toLowerCase().includes(k.toLowerCase()));
+
+    if (!location || typeof location !== 'string') return baseRates.Default;
+
+    const key = Object.keys(baseRates).find(k => location.toLowerCase().includes(k.toLowerCase()));
     let baseRate = key ? baseRates[key] : baseRates.Default;
-    
-    if (colData?.market_adjustment) {
+
+    if (colData && typeof colData.market_adjustment === 'number') {
       baseRate = Math.round(baseRate * colData.market_adjustment);
     }
-    
+
     return baseRate;
-  }
-
-  static _validateInputs(offer, finances) {
-    const requiredOffer = ['base_salary', 'location', 'company_type'];
-    const requiredFinance = ['monthly_rent', 'monthly_loans', 'monthly_expenses'];
-    
-    for (const field of requiredOffer) {
-      if (offer[field] === undefined || offer[field] === null || offer[field] === '') {
-        throw new Error(`Missing required offer field: ${field}`);
-      }
-    }
-    
-    for (const field of requiredFinance) {
-      if (finances[field] === undefined || finances[field] === null || finances[field] === '') {
-        throw new Error(`Missing required finance field: ${field}`);
-      }
-    }
-
-    const base = parseFloat(offer.base_salary);
-    if (Number.isNaN(base) || base < 1000) throw new Error('Base salary must be at least $1,000');
   }
 }
 
