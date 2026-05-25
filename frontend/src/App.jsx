@@ -17,6 +17,12 @@ const ProtectedRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" replace />;
 };
 
+// NEW: Wrapper so useAuth() is called inside AuthProvider
+const ArbitrageRoute = () => {
+  const { user } = useAuth();
+  return <SkillArbitragePanel userSkills={user?.skills || []} />;
+};
+
 const App = () => (
   <AuthProvider>
     <Router>
@@ -40,7 +46,7 @@ const App = () => (
           <Route path="/referrals" element={<ReferralPathfinder />} />
           <Route path="/interview" element={<InterviewBattleStation />} />
           <Route path="/dashboard/income" element={<IncomeSimulatorPanel />} />
-          <Route path="/dashboard/arbitrage" element={<SkillArbitragePanel userSkills={user?.skills || []} />} />
+          <Route path="/dashboard/arbitrage" element={<ArbitrageRoute />} />
         </Routes>
       </div>
     </Router>

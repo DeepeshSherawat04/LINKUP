@@ -9,7 +9,7 @@ const skillsModel = require('../models/skillsModel');
 const userModel = require('../models/userModel');
 const careerSingularityScore = require('../services/scoring/careerSingularityScore');
 const predictionService = require('../services/intelligence/predictionService');
-const arbitrageService = require('../services/intelligence/arbitrageService');
+const arbitrageService = require('../services/arbitrageService');
 const CareerTwin = require('../services/intelligence/careerTwinService');
 
 // ─── HEALTH CHECK ───
