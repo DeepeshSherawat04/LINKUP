@@ -1,0 +1,390 @@
+.gjp-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.gjp-header h1 {
+  font-size: 1.6rem;
+  margin: 0 0 4px 0;
+  color: #f8fafc;
+}
+
+.gjp-header p {
+  margin: 0 0 20px 0;
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+/* Stats Bar */
+.gjp-statsbar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.gjp-stat {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 14px 22px;
+  min-width: 100px;
+  text-align: center;
+}
+
+.gjp-stat-num {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.gjp-stat-label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Search */
+.gjp-search {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.gjp-search input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 14px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 0.95rem;
+}
+
+.gjp-search input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.gjp-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-size: 0.9rem;
+}
+
+.gjp-btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.gjp-btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.gjp-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gjp-btn-secondary {
+  background: #1e293b;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+}
+
+.gjp-btn-secondary:hover {
+  background: #334155;
+}
+
+.gjp-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+/* Form */
+.gjp-form {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 24px;
+}
+
+.gjp-form h3 {
+  margin: 0 0 16px 0;
+  color: #f8fafc;
+  font-size: 1.1rem;
+}
+
+.gjp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.gjp-form-grid input,
+.gjp-form-grid select,
+.gjp-form textarea {
+  padding: 9px 12px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 0.9rem;
+}
+
+.gjp-form-grid input:focus,
+.gjp-form-grid select:focus,
+.gjp-form textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.gjp-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.gjp-checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.gjp-form textarea {
+  width: 100%;
+  margin-bottom: 14px;
+  resize: vertical;
+}
+
+/* Results Grid */
+.gjp-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin-bottom: 32px;
+}
+
+.gjp-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.gjp-card h3 {
+  margin: 0 0 14px 0;
+  font-size: 1rem;
+  color: #f8fafc;
+}
+
+/* Stats Card */
+.gjp-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.gjp-s-item {
+  text-align: center;
+}
+
+.gjp-s-val {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.gjp-s-label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* Worked / Flags */
+.gjp-worked {
+  border-left: 4px solid #10b981;
+}
+
+.gjp-flags {
+  border-left: 4px solid #ef4444;
+}
+
+.gjp-worked ul,
+.gjp-flags ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.gjp-worked li,
+.gjp-flags li {
+  display: flex;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid #334155;
+  font-size: 0.92rem;
+}
+
+.gjp-worked li:last-child,
+.gjp-flags li:last-child {
+  border-bottom: none;
+}
+
+.gjp-worked strong {
+  color: #10b981;
+}
+
+.gjp-flags strong {
+  color: #ef4444;
+}
+
+/* Gaps */
+.gjp-gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gjp-gap-item {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.gjp-gap-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.gjp-gap-name {
+  font-weight: 600;
+  color: #f1f5f9;
+  font-size: 0.92rem;
+}
+
+.gjp-gap-badge {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.gjp-gap-meta {
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+/* Local History */
+.gjp-local-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #334155;
+  font-size: 0.9rem;
+}
+
+.gjp-local-date {
+  color: #94a3b8;
+  min-width: 100px;
+}
+
+.gjp-local-outcome {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.gjp-local-resp {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+/* History Table */
+.gjp-history {
+  margin-top: 28px;
+}
+
+.gjp-history h3 {
+  margin-bottom: 14px;
+  color: #f8fafc;
+}
+
+.gjp-empty {
+  padding: 28px;
+  text-align: center;
+  color: #64748b;
+  background: #1e293b;
+  border-radius: 12px;
+  border: 1px dashed #334155;
+}
+
+.gjp-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 0.9rem;
+}
+
+.gjp-table th,
+.gjp-table td {
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid #334155;
+}
+
+.gjp-table th {
+  background: #0f172a;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gjp-table td {
+  color: #e2e8f0;
+}
+
+.gjp-badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: white;
+  text-transform: capitalize;
+}
+
+@media (max-width: 640px) {
+  .gjp-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .gjp-search {
+    flex-direction: column;
+  }
+  .gjp-search input {
+    width: 100%;
+  }
+}
