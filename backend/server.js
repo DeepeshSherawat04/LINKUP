@@ -49,7 +49,12 @@ app.use('/api/referrals', referralRoutes);
 app.use('/api/income', incomeRoutes);
 app.use('/api/arbitrage', arbitrageRoutes);
 
-// ─── HEALTH CHECK ───
+// ─── HEALTH CHECK ──_
+// ─── HEALTH CHECKS ───
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', service: 'linkup-server' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -71,8 +76,8 @@ app.get('/api/health', (req, res) => {
       'career-twin-agent',
       'career-race-protocol',
       'websocket-interview',
-      'income-protection-simulator',   // NEW
-      'skill-arbitrage-radar'          // NEW
+      'income-protection-simulator',
+      'skill-arbitrage-radar'
     ]
   });
 });
