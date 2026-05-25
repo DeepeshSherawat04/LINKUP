@@ -30,29 +30,42 @@ class IncomeSimulationService {
   /* =====================================================================
      INPUT SANITIZATION — replaces the old _validateInputs that threw 500s
      ===================================================================== */
-  static _sanitizeInputs(offer, finances) {
-  // Guard parseFloat so a bad string ("N/A") doesn't become NaN
-  const rawBase = parseFloat(offer?.base_salary || offer?.incomePotential?.min || offer?.incomePotential?.max || 60000) || 60000;
-  const rawMax  = parseFloat(offer?.incomePotential?.max || rawBase * 1.5) || rawBase * 1.5;
+static _sanitizeInputs(offer, finances) {
+  // Helper: coerce any value to a clean number, fallback if NaN
+  const safeNum = (val, fallback = 0) => {
+    if (val === null || val === undefined || val === '') return fallback;
+    const cleaned = typeof val === 'string' ? val.replace(/[^0-9.-]/g, '') : val;
+    const n = parseFloat(cleaned);
+    return Number.isNaN(n) ? fallback : n;
+  };
+
+  // Income: opportunity shape vs job-offer shape
+  const rawBase = safeNum(
+    offer?.base_salary ??
+    offer?.incomePotential?.min ??
+    offer?.incomePotential?.max,
+    60000
+  );
+  const rawMax = safeNum(offer?.incomePotential?.max, rawBase * 1.5);
 
   return {
     baseAnnual: Math.max(FinancialMath.toCents(rawBase), 100000),
     maxAnnual:  Math.max(FinancialMath.toCents(rawMax),  100000),
 
-    equityPct:       parseFloat(offer?.equity_percentage || 0) || 0,
-    equityValuation: FinancialMath.toCents(Number(offer?.equity_valuation || 0)),
-    bonusTarget:     FinancialMath.toCents(Number(offer?.bonus_target_annual || 0)),
+    equityPct:       safeNum(offer?.equity_percentage, 0),
+    equityValuation: FinancialMath.toCents(safeNum(offer?.equity_valuation, 0)),
+    bonusTarget:     FinancialMath.toCents(safeNum(offer?.bonus_target_annual, 0)),
 
     location:        (offer?.location || 'Remote').toString(),
     locationCountry: offer?.location_country || null,
     companyType:     (offer?.company_type || 'startup').toString(),
     companyName:     (offer?.company_name || offer?.title || 'Unknown Opportunity').toString(),
 
-    // Coerce personal-finance fields so strings from form inputs don't crash toCents
-    rent:  FinancialMath.toCents(Number(finances?.monthly_rent || 0)),
-    loans: FinancialMath.toCents(Number(finances?.monthly_loans || 0)),
-    expenses: FinancialMath.toCents(Number(finances?.monthly_expenses || 0)),
-    savings:  FinancialMath.toCents(Number(finances?.savings || 0)),
+    // Personal finances — the most common crash site
+    rent:     FinancialMath.toCents(safeNum(finances?.monthly_rent, 0)),
+    loans:    FinancialMath.toCents(safeNum(finances?.monthly_loans, 0)),
+    expenses: FinancialMath.toCents(safeNum(finances?.monthly_expenses, 0)),
+    savings:  FinancialMath.toCents(safeNum(finances?.savings, 0)),
 
     hasRelocation: !!(finances?.relocation_bonus || offer?.relocation_bonus),
     relocationClawbackMonths: parseInt(finances?.relocation_clawback_months || offer?.relocation_clawback_months) || 0,
