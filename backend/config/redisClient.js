@@ -1,13 +1,22 @@
+// backend/config/redisClient.js
 const redis = require('redis');
 
 const client = redis.createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  socket: {
+    connectTimeout: 5000,
+    reconnectStrategy: (retries) => Math.min(retries * 50, 1000)
+  },
+  disableOfflineQueue: true // 🔥 CRITICAL: reject immediately when disconnected
 });
 
 client.on('error', (err) => {
-  // Silent fail in production — never crash the server because Redis hiccuped
   console.warn('Redis error:', err.message);
 });
+
+client.on('connect', () => console.log('Redis client connected'));
+client.on('ready', () => console.log('Redis ready'));
+client.on('end', () => console.log('Redis connection closed'));
 
 async function connectRedis() {
   try {
@@ -23,49 +32,62 @@ async function connectRedis() {
 // ─── Safe wrappers ───
 async function setCache(key, value, ttlSeconds = 3600) {
   try {
-    if (!client.isOpen) return false;
+    if (!client.isReady) return false; // 🔥 was isOpen
     await client.setEx(key, ttlSeconds, JSON.stringify(value));
     return true;
-  } catch (err) { return false; }
+  } catch (err) { 
+    console.warn('Redis setCache error:', err.message);
+    return false; 
+  }
 }
 
 async function getCache(key) {
   try {
-    if (!client.isOpen) return null;
+    if (!client.isReady) return null; // 🔥 was isOpen
     const data = await client.get(key);
     return data ? JSON.parse(data) : null;
-  } catch (err) { return null; }
+  } catch (err) { 
+    console.warn('Redis getCache error:', err.message);
+    return null; 
+  }
 }
 
 async function deleteCache(key) {
   try {
-    if (!client.isOpen) return false;
+    if (!client.isReady) return false; // 🔥 was isOpen
     await client.del(key);
     return true;
-  } catch (err) { return false; }
+  } catch (err) { 
+    console.warn('Redis deleteCache error:', err.message);
+    return false; 
+  }
 }
 
-// Raw string storage — no JSON wrapping (for simple status strings)
 async function setRaw(key, value, ttlSeconds = 3600) {
   try {
-    if (!client.isOpen) return false;
+    if (!client.isReady) return false; // 🔥 was isOpen
     await client.setEx(key, ttlSeconds, String(value));
     return true;
-  } catch (err) { return false; }
+  } catch (err) { 
+    console.warn('Redis setRaw error:', err.message);
+    return false; 
+  }
 }
 
 async function getRaw(key) {
   try {
-    if (!client.isOpen) return null;
+    if (!client.isReady) return null; // 🔥 was isOpen
     return await client.get(key);
-  } catch (err) { return null; }
+  } catch (err) { 
+    console.warn('Redis getRaw error:', err.message);
+    return null; 
+  }
 }
 
-// Production-safe SCAN iterator (O(1) per batch, never blocks Redis)
 async function scanKeys(pattern, countPerBatch = 100) {
   const keys = [];
   try {
-    if (!client.isOpen) return keys;
+    if (!client.isReady) return keys; // 🔥 was isOpen
     for await (const key of client.scanIterator({ MATCH: pattern, COUNT: countPerBatch })) {
       keys.push(key);
     }
@@ -75,11 +97,10 @@ async function scanKeys(pattern, countPerBatch = 100) {
   return keys;
 }
 
-// Batch delete with safety limit
 async function deleteKeys(keys) {
   try {
-    if (!client.isOpen || !keys?.length) return 0;
-    const result = await client.del(keys); // v4 accepts array
+    if (!client.isReady || !keys?.length) return 0; // 🔥 was isOpen
+    const result = await client.del(keys);
     return result || 0;
   } catch (err) {
     console.warn('Redis delete error:', err.message);
