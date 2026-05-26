@@ -3,7 +3,7 @@ const supabase = require('../config/supabaseClient');
 
 exports.save = async (planData) => {
   const { data, error } = await supabase
-    .from('execution_plans')
+    .from('execution_plans')a
     .upsert({
       user_id: planData.user_id,
       opportunity_id: planData.opportunity_id,

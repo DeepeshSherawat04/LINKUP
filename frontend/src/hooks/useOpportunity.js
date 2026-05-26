@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { opportunityApi } from '../api/opportunityApi';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/api'; // Direct Axios instance for critical calls like execution plan
 
 /* ─────────────────────────────────────────
    1. RADAR — Personalized top opportunities
@@ -276,42 +277,40 @@ export const useExecutionPlan = () => {
     setSimulation(null);
 
     try {
-      // Use opportunityApi if generatePlan exists, otherwise use execution API directly
-      let planRes;
-      if (opportunityApi.generatePlan) {
-        planRes = await opportunityApi.generatePlan(opportunityId, options);
-      } else {
-        // Direct call to execution service
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/execution/plan`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-            },
-            body: JSON.stringify({
-              opportunityId,
-              goal_type: options.goal_type || 'freelance',
-              time_per_week: options.time_per_week || 15,
-              skills: options.skills || [],
-            }),
-          }
-        );
-        if (!response.ok) throw new Error('Plan generation failed');
-        planRes = await response.json();
+      // 1. Generate AI Plan — direct axios call (consistent with api.js interceptors)
+      const planRes = await api.post('/execution/plan', {
+        opportunityId,
+        goal_type: options.goal_type || 'freelance',
+        time_per_week: options.time_per_week || 15,
+        skills: options.skills || [],
+      });
+
+      // DEBUG — check browser console after clicking Generate
+      console.log('🔥 RAW planRes.data:', planRes.data);
+
+      // FIXED: Unwrap nested { success: true, data: { weeks: [...] } }
+      const planPayload = planRes.data?.data ?? planRes.data ?? planRes;
+      setPlan(planPayload);
+
+      // 2. Fetch Income Simulation
+      try {
+        const simRes = await api.post(`/opportunities/${opportunityId}/simulate`, {});
+        console.log('🔥 RAW simRes.data:', simRes.data);
+
+        const simPayload = simRes.data?.data ?? simRes.data ?? simRes;
+        // Ensure array so .map() works in ExecutionPlan.jsx
+        setSimulation(Array.isArray(simPayload) ? simPayload : simPayload ? [simPayload] : []);
+      } catch (simErr) {
+        console.warn('Simulation fetch failed (non-critical):', simErr.message);
       }
 
-      const simRes = await opportunityApi.simulateIncome(opportunityId, 6);
-
-      setPlan(planRes.data ?? planRes);
-      setSimulation(simRes.data?.data);
     } catch (err) {
+      console.error('Plan generation error:', err);
       setError(
-        err.response?.data?.message ||
-          err.response?.data?.error?.message ||
-          err.message ||
-          'Failed to generate plan. AI service may be temporarily unavailable.'
+        err.response?.data?.message || 
+        err.response?.data?.error?.message ||
+        err.message || 
+        'Failed to generate execution plan'
       );
     } finally {
       setLoading(false);

@@ -1,10 +1,11 @@
 // ExecutionPlan.jsx — FIXED
-// Fixes: chart dimension guard, simulation data mapping, empty state handling
+// Fixes: chart dimension guard, simulation data mapping, empty state handling,
+//        AND dropdown now shows ALL opportunities instead of radar subset
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useOpportunityRadar, useExecutionPlan } from '../hooks/useOpportunity';
+import { useAllOpportunities, useExecutionPlan } from '../hooks/useOpportunity';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import EmptyState from '../components/common/EmptyState';
 
@@ -13,7 +14,8 @@ const ExecutionPlan = () => {
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get('opportunity');
 
-  const { data: opportunities, loading: loadingList, error: listError } = useOpportunityRadar();
+  // FIXED: useAllOpportunities shows every opportunity in the dropdown
+  const { data: opportunities, loading: loadingList, error: listError } = useAllOpportunities();
   const { plan, simulation, loading, error, generate } = useExecutionPlan();
 
   const [selectedId, setSelectedId] = useState('');
@@ -33,6 +35,8 @@ const ExecutionPlan = () => {
       time_per_week: 15,
     });
   };
+
+  // ... rest of the component stays exactly the same as your current file ...
 
   if (!user) {
     return (
