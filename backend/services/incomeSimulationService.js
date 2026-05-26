@@ -15,14 +15,15 @@ class IncomeSimulationService {
       console.warn('[IncomeSimulation] CoL fetch failed, using defaults:', e.message);
     }
 
-    const monthlyFixed = this._calculateMonthlyFixed(inputs, col);
-    const taxRate = (col && typeof col.tax_rate === 'number') ? col.tax_rate : 0.30;
-    const marketRate = this._getMarketRate(inputs.location, col);
+    const safeCol = this._safeColData(col);
+    const monthlyFixed = this._calculateMonthlyFixed(inputs, safeCol);
+    const taxRate = safeCol.tax_rate;
+    const marketRate = this._getMarketRate(inputs.location, safeCol);
 
     // 3. Build canonical scenarios (same shape the frontend expects)
-    const startup = this._buildStartupScenario(inputs, monthlyFixed, taxRate, marketRate, col);
+    const startup = this._buildStartupScenario(inputs, monthlyFixed, taxRate, marketRate, safeCol);
     const bigTech = this._buildBigTechScenario(inputs, monthlyFixed, taxRate, marketRate, col);
-    const remote = this._buildRemoteScenario(inputs, monthlyFixed, taxRate, marketRate, col);
+    const remote = this._buildRemoteScenario(inputs, monthlyFixed, taxRate, marketRate, safeCol);
 
     return [startup, bigTech, remote];
   }
@@ -30,6 +31,37 @@ class IncomeSimulationService {
     // Controller expects this method name
   static async simulate(offerDetails, personalFinances) {
     return this.buildScenarios(offerDetails, personalFinances);
+  }
+
+
+  /* =====================================================================
+     SAFE CoL DATA NORMALIZER — prevents "Cannot read properties of undefined"
+     ===================================================================== */
+  static _safeColData(col) {
+    if (!col || typeof col !== 'object') {
+      return {
+        rent_1br_cents: 0,
+        tax_rate: 0.30,
+        market_adjustment: 1.0,
+        rates: { from: 1.0, to: 1.0, currency: 'USD' },
+        source: 'fallback',
+        city: 'Unknown',
+        country: 'Unknown'
+      };
+    }
+
+    return {
+      rent_1br_cents: typeof col.rent_1br_cents === 'number' ? col.rent_1br_cents : 0,
+      tax_rate: typeof col.tax_rate === 'number' ? col.tax_rate : 0.30,
+      market_adjustment: typeof col.market_adjustment === 'number' ? col.market_adjustment : 1.0,
+      rates: col.rates || { from: 1.0, to: 1.0, currency: 'USD' },
+      source: col.source || 'fallback',
+      city: col.city || 'Unknown',
+      country: col.country || 'Unknown',
+      fetched_at: col.fetched_at || new Date().toISOString(),
+      data_quality: col.data_quality || 'estimated',
+      note: col.note || 'Using conservative defaults.'
+    };
   }
 
   /* =====================================================================
@@ -369,9 +401,11 @@ static _sanitizeInputs(offer, finances) {
     const key = Object.keys(baseRates).find(k => location.toLowerCase().includes(k.toLowerCase()));
     let baseRate = key ? baseRates[key] : baseRates.Default;
 
-    if (colData && typeof colData.market_adjustment === 'number') {
-      baseRate = Math.round(baseRate * colData.market_adjustment);
-    }
+    // FIXED: Safe access to market_adjustment with fallback
+    const adjustment = (colData && typeof colData.market_adjustment === 'number') 
+      ? colData.market_adjustment 
+      : 1.0;
+    baseRate = Math.round(baseRate * adjustment);
 
     return baseRate;
   }

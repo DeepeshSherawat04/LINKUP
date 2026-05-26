@@ -1,5 +1,5 @@
-// aiAnalysisService.js — FIXED v2.2
-// Fixes: model name -> gemini-1.5-flash-8b (free tier compatible)
+// aiAnalysisService.js — FIXED v2.3
+// Fixes: model name -> gemini-2.5-flash (current free tier model as of May 2026)
 //        robust JSON extraction, fallback structure
 
 const genAI = require('../config/geminiClient');
@@ -9,9 +9,10 @@ const getModel = () => {
     console.log('❌ Gemini client not initialized');
     return null;
   }
-  // FIXED: use free-tier compatible model
+  // FIXED: Use gemini-2.5-flash — the only model confirmed working on free tier in 2026
+  // gemini-1.5-flash and gemini-1.5-flash-8b are deprecated/removed from free tier
   return genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash-8b',
+    model: 'gemini-2.5-flash',
     generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
   });
 };
