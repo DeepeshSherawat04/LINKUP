@@ -12,7 +12,7 @@ const getModel = () => {
   // FIXED: Use gemini-2.5-flash — the only model confirmed working on free tier in 2026
   // gemini-1.5-flash and gemini-1.5-flash-8b are deprecated/removed from free tier
   return genAI.getGenerativeModel({ 
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-flash-lite',
     generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
   });
 };
