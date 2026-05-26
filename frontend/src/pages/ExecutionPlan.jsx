@@ -1,4 +1,6 @@
-// ExecutionPlan.jsx
+// ExecutionPlan.jsx — FIXED
+// Fixes: chart dimension guard, simulation data mapping, empty state handling
+
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -21,18 +23,16 @@ const ExecutionPlan = () => {
     if (!opportunities.length) return;
     if (preselectedId && opportunities.find((o) => o.id === preselectedId)) {
       setSelectedId(preselectedId);
-    } //else if (opportunities[0]) {
-    //  setSelectedId(opportunities[0].id);
-   // }
+    }
   }, [opportunities, preselectedId]);
 
   const handleGenerate = () => {
-  if (!selectedId) return;
-  generate(selectedId, {
-    goal_type: 'freelance',
-    time_per_week: 15,
-  });
-};
+    if (!selectedId) return;
+    generate(selectedId, {
+      goal_type: 'freelance',
+      time_per_week: 15,
+    });
+  };
 
   if (!user) {
     return (
@@ -77,31 +77,31 @@ const ExecutionPlan = () => {
               Target Opportunity
             </label>
             <select
-  value={selectedId}
-  onChange={(e) => setSelectedId(e.target.value)}
-  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
->
-  <option value="">-- Select an opportunity --</option>
-  {opportunities.map((opp) => (
-    <option key={opp.id} value={opp.id}>
-      {opp.title} (Score: {opp.score ?? '—'} • Match: {opp.skill_match_percentage ?? '—'}%)
-    </option>
-  ))}
-</select>
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+            >
+              <option value="">-- Select an opportunity --</option>
+              {opportunities.map((opp) => (
+                <option key={opp.id} value={opp.id}>
+                  {opp.title} (Score: {opp.score ?? '—'} • Match: {opp.skill_match_percentage ?? '—'}%)
+                </option>
+              ))}
+            </select>
           </div>
 
-         {selectedOpp && (
-  <div className="flex items-end">
-    <div className="bg-gray-50 rounded-lg px-4 py-2.5 text-center">
-      <p className="text-xs text-gray-500">Income Potential</p>
-      <p className="font-bold text-gray-900">
-        {selectedOpp.income_potential
-          ? `$${selectedOpp.income_potential.toLocaleString()}`
-          : '—'}
-      </p>
-    </div>
-  </div>
-)}
+          {selectedOpp && (
+            <div className="flex items-end">
+              <div className="bg-gray-50 rounded-lg px-4 py-2.5 text-center">
+                <p className="text-xs text-gray-500">Income Potential</p>
+                <p className="font-bold text-gray-900">
+                  {selectedOpp.income_potential
+                    ? `$${selectedOpp.income_potential.toLocaleString()}`
+                    : '—'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <button
@@ -135,8 +135,8 @@ const ExecutionPlan = () => {
       {/* Loading State */}
       {loading && !plan && <LoadingSkeleton type="plan" />}
 
-      {/* Income Simulation */}
-      {simulation && (
+      {/* Income Simulation — FIXED: map backend data correctly */}
+      {simulation && simulation.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 animate-in fade-in slide-in-from-bottom-2">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
             <div>
@@ -145,47 +145,60 @@ const ExecutionPlan = () => {
             </div>
             <span
               className={`text-xs px-3 py-1.5 rounded-full border font-bold w-fit ${getProbabilityBadge(
-                simulation.income_probability?.level
+                simulation[0]?.trap_risk_score >= 70 ? 'Low' : 
+                simulation[0]?.trap_risk_score >= 40 ? 'Medium' : 'High'
               )}`}
             >
-              {simulation.income_probability?.level} Probability •{' '}
-              {simulation.income_probability?.range}
+              {simulation[0]?.trap_risk_score >= 70 ? 'High Risk' : 
+               simulation[0]?.trap_risk_score >= 40 ? 'Medium Risk' : 'Low Risk'}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
-            {simulation.projection?.slice(0, 4).map((month) => (
-              <div
-                key={month.month}
-                className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100"
-              >
-                <p className="text-xs text-gray-500 mb-1">Month {month.month}</p>
-                <p className="font-bold text-gray-900 text-sm md:text-base">
-                  ${month.estimatedIncome.toLocaleString()}
-                </p>
-                <div className="mt-1.5">
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className="bg-blue-500 h-1.5 rounded-full"
-                      style={{ width: `${month.confidence}%` }}
-                    ></div>
+          {/* FIXED: Chart container with explicit minHeight */}
+          <div className="mb-4" style={{ minHeight: 200 }}>
+            {simulation[0]?.projection?.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+                {simulation[0].projection.slice(0, 4).map((month) => (
+                  <div
+                    key={month.month}
+                    className="bg-gray-50 rounded-lg p-3 text-center border border-gray-100"
+                  >
+                    <p className="text-xs text-gray-500 mb-1">Month {month.month}</p>
+                    <p className="font-bold text-gray-900 text-sm md:text-base">
+                      ${Math.round(month.disposable_cents / 100).toLocaleString()}
+                    </p>
+                    <div className="mt-1.5">
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className="bg-blue-500 h-1.5 rounded-full"
+                          style={{ width: `${Math.min(100, Math.max(0, (month.disposable_cents / (month.income_cents || 1)) * 100))}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-[10px] text-blue-600 mt-0.5">
+                        {month.event || 'Stable'}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-blue-600 mt-0.5">{month.confidence}% confidence</p>
-                </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="text-center text-gray-400 py-8">
+                <p className="text-sm">No projection data available</p>
+              </div>
+            )}
           </div>
 
-          <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-            <p className="font-semibold text-blue-900 text-sm mb-2">AI Recommendations</p>
-            <ul className="space-y-1.5">
-              {simulation.summary?.recommendedActions?.map((action, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-blue-800">
-                  <span className="text-blue-500 mt-0.5">→</span>
-                  <span>{action}</span>
-                </li>
-              ))}
-            </ul>
+          {/* Scenario summaries */}
+          <div className="space-y-2">
+            {simulation.map((scenario, idx) => (
+              <div key={idx} className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                <p className="font-semibold text-blue-900 text-sm">{scenario.name}</p>
+                <p className="text-xs text-blue-700">
+                  Break-even: Month {scenario.break_even_month || '—'} | 
+                  Trap Risk: {scenario.trap_risk_score}/100
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -247,16 +260,26 @@ const ExecutionPlan = () => {
                   ))}
                 </div>
 
+                {/* Deliverable */}
+                {plan.weeks[activeWeek].deliverable && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-1">Week Deliverable</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      ✅ {plan.weeks[activeWeek].deliverable}
+                    </p>
+                  </div>
+                )}
+
                 {/* Progress indicator */}
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <div className="flex justify-between text-xs text-gray-500 mb-1">
                     <span>Overall Progress</span>
-                    <span>{(((activeWeek + 1) / 4) * 100).toFixed(0)}%</span>
+                    <span>{(((activeWeek + 1) / plan.weeks.length) * 100).toFixed(0)}%</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${((activeWeek + 1) / 4) * 100}%` }}
+                      style={{ width: `${((activeWeek + 1) / plan.weeks.length) * 100}%` }}
                     ></div>
                   </div>
                 </div>

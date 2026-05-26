@@ -1,5 +1,5 @@
-// aiAnalysisService.js — UPGRADED v2.0
-// Priority 3: Explainability | Priority 4: Robust fallbacks & error handling
+// aiAnalysisService.js — FIXED v2.1
+// Fixes: model name, JSON extraction, fallback structure, quota handling
 
 const genAI = require('../config/geminiClient');
 
@@ -8,15 +8,50 @@ const getModel = () => {
     console.log('❌ Gemini client not initialized');
     return null;
   }
+  // FIXED: use correct model name
   return genAI.getGenerativeModel({ 
-    model: 'gemini-3.5-flash',
-    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+    model: 'gemini-1.5-flash',
+    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
   });
 };
 
 /**
- * Feature 1: AI Opportunity Explanation (Priority 3)
- * Enhanced with structured explainability and fallback
+ * Robust JSON extractor — handles markdown blocks, extra text, nested braces
+ */
+const safeJSONParse = (text) => {
+  if (!text) return null;
+
+  // Strategy 1: Extract from markdown code block
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch) {
+    try { return JSON.parse(codeBlockMatch[1].trim()); } catch {}
+  }
+
+  // Strategy 2: Find first balanced JSON object
+  let depth = 0, start = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (text[i] === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        try { return JSON.parse(text.slice(start, i + 1)); } catch {}
+      }
+    }
+  }
+
+  // Strategy 3: Greedy fallback (original behavior)
+  const greedyMatch = text.match(/\{[\s\S]*\}/);
+  if (greedyMatch) {
+    try { return JSON.parse(greedyMatch[0]); } catch {}
+  }
+
+  return null;
+};
+
+/**
+ * Feature 1: AI Opportunity Explanation
  */
 exports.generateOpportunityExplanation = async (opportunity, userProfile, scoreResult) => {
   try {
@@ -53,13 +88,13 @@ RULES:
     const result = await model.generateContent(prompt);
     const text = result.response.text();
 
-    const jsonMatch = text.match(/\{[\s\S]*?\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = safeJSONParse(text);
+    if (parsed) {
+      const fb = getFallbackExplanation(opportunity, userProfile, scoreResult);
       return {
-        summary: parsed.summary || getFallbackExplanation(opportunity, userProfile, scoreResult).summary,
-        timeline: parsed.timeline || getFallbackExplanation(opportunity, userProfile, scoreResult).timeline,
-        market_edge: parsed.market_edge || '',
+        summary: parsed.summary || fb.summary,
+        timeline: parsed.timeline || fb.timeline,
+        market_edge: parsed.market_edge || fb.market_edge,
         source: 'AI'
       };
     }
@@ -73,7 +108,7 @@ RULES:
 };
 
 /**
- * Feature 2: AI 30-Day Execution Plan (Priority 3)
+ * Feature 2: AI 30-Day Execution Plan — FIXED
  */
 exports.generateExecutionPlan = async (userProfile, opportunity) => {
   try {
@@ -126,18 +161,18 @@ RULES:
     const result = await model.generateContent(prompt);
     const text = result.response.text();
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON in response');
+    const parsed = safeJSONParse(text);
+    if (!parsed) throw new Error('No JSON in response');
 
-    const parsed = JSON.parse(jsonMatch[0]);
-
+    // Normalize to flat week properties (week_1..week_4) for controller compatibility
+    const weeks = parsed.weeks || [];
     return {
-      weeks: parsed.weeks || [],
+      weeks,
       milestones: parsed.milestones || [],
-      week_1: parsed.weeks?.[0] || { focus: 'Foundation', tasks: [], deliverable: '' },
-      week_2: parsed.weeks?.[1] || { focus: 'Practice', tasks: [], deliverable: '' },
-      week_3: parsed.weeks?.[2] || { focus: 'Portfolio', tasks: [], deliverable: '' },
-      week_4: parsed.weeks?.[3] || { focus: 'Outreach', tasks: [], deliverable: '' },
+      week_1: weeks[0] || null,
+      week_2: weeks[1] || null,
+      week_3: weeks[2] || null,
+      week_4: weeks[3] || null,
       source: 'AI'
     };
 
@@ -148,7 +183,7 @@ RULES:
 };
 
 /**
- * Feature 3: "Why Not This Path?" AI Explanation (Priority 3)
+ * Feature 3: "Why Not This Path?" AI Explanation
  */
 exports.generateWhyNotExplanation = async (opportunity, scoreResult, incomeProbability) => {
   try {
@@ -170,10 +205,8 @@ Return JSON: {"reasons": ["reason 1", "reason 2"], "suggestion": "one-line actio
     const result = await model.generateContent(prompt);
     const text = result.response.text();
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
-
-    return null;
+    const parsed = safeJSONParse(text);
+    return parsed || null;
 
   } catch (error) {
     console.error('AI why-not error:', error.message);
@@ -182,7 +215,7 @@ Return JSON: {"reasons": ["reason 1", "reason 2"], "suggestion": "one-line actio
 };
 
 /**
- * Resume skill extraction with error handling (Priority 4)
+ * Resume skill extraction with error handling
  */
 exports.extractSkillsFromResume = async (resumeText) => {
   if (!resumeText || resumeText.length < 50) {
@@ -213,10 +246,9 @@ Rules:
     const result = await model.generateContent(prompt);
     const text = result.response.text();
 
-    const jsonMatch = text.match(/\[.*\]/s);
-    if (jsonMatch) {
-      const skills = JSON.parse(jsonMatch[0]);
-      return { skills: skills.filter(s => s.length > 0 && s.length < 40), source: 'AI' };
+    const parsed = safeJSONParse(text);
+    if (parsed && Array.isArray(parsed)) {
+      return { skills: parsed.filter(s => s.length > 0 && s.length < 40), source: 'AI' };
     }
 
     return { 
@@ -235,7 +267,7 @@ Rules:
 };
 
 /**
- * Income explanation with fallback (Priority 3)
+ * Income explanation with fallback
  */
 exports.generateIncomeExplanation = async (opportunity, incomePotential) => {
   try {
@@ -268,18 +300,24 @@ function getFallbackExplanation(opportunity, userProfile, scoreResult) {
 }
 
 function getFallbackPlan() {
+  const weeks = [
+    { week: 1, focus: 'Foundation & Setup', tasks: ['Set up your workspace and tools', 'Complete one beginner tutorial', 'Define your target client profile'], deliverable: 'Ready workspace + client profile' },
+    { week: 2, focus: 'Skill Practice', tasks: ['Build a small practice project', 'Document your process', 'Get feedback from one peer'], deliverable: 'Practice project completed' },
+    { week: 3, focus: 'Portfolio Building', tasks: ['Create 2 portfolio pieces', 'Write case studies for each', 'Set up a simple portfolio page'], deliverable: '2 portfolio pieces + case studies' },
+    { week: 4, focus: 'Client Acquisition', tasks: ['Reach out to 10 potential clients', 'Send 5 personalized proposals', 'Follow up on all responses'], deliverable: '5 proposals sent + first conversations' }
+  ];
+
   return {
-    weeks: [
-      { week: 1, focus: 'Foundation & Setup', tasks: ['Set up your workspace and tools', 'Complete one beginner tutorial', 'Define your target client profile'], deliverable: 'Ready workspace + client profile' },
-      { week: 2, focus: 'Skill Practice', tasks: ['Build a small practice project', 'Document your process', 'Get feedback from one peer'], deliverable: 'Practice project completed' },
-      { week: 3, focus: 'Portfolio Building', tasks: ['Create 2 portfolio pieces', 'Write case studies for each', 'Set up a simple portfolio page'], deliverable: '2 portfolio pieces + case studies' },
-      { week: 4, focus: 'Client Acquisition', tasks: ['Reach out to 10 potential clients', 'Send 5 personalized proposals', 'Follow up on all responses'], deliverable: '5 proposals sent + first conversations' }
-    ],
+    weeks,
     milestones: [
       { day: 7, milestone: 'Tools and workspace ready' },
       { day: 14, milestone: 'First practice project complete' },
       { day: 30, milestone: 'First client conversation scheduled' }
     ],
+    week_1: weeks[0],
+    week_2: weeks[1],
+    week_3: weeks[2],
+    week_4: weeks[3],
     source: 'fallback'
   };
 }

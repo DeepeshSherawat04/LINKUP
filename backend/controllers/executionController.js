@@ -1,4 +1,6 @@
-// executionController.js
+// executionController.js — FIXED
+// Fixes: simulateIncome passes correct args, generateAIPlan handles AI plan shape
+
 const executionPlanModel = require('../models/executionPlanModel');
 const incomeSimulationService = require('../services/incomeSimulationService');
 const aiAnalysisService = require('../services/aiAnalysisService');
@@ -18,9 +20,12 @@ exports.getExecutionPlan = async (req, res, next) => {
 
 exports.simulateIncome = async (req, res, next) => {
   try {
-    const simulation = await incomeSimulationService.simulate(req.body);
+    // FIXED: incomeSimulationService is a class, call static method
+    // The controller receives opportunity data in req.body
+    const simulation = await incomeSimulationService.simulate(req.body, req.body);
     res.json({ success: true, data: simulation });
   } catch (err) {
+    console.error('simulateIncome error:', err.message);
     next(err);
   }
 };
@@ -33,7 +38,7 @@ exports.parseResume = async (req, res, next) => {
     }
 
     const skills = await aiAnalysisService.extractSkillsFromResume(resumeText);
-    
+
     res.json({ 
       success: true, 
       data: { 
@@ -52,7 +57,7 @@ exports.generateAIPlan = async (req, res, next) => {
   try {
     const userId = req.user?.id;
     const { opportunityId, goal_type, time_per_week } = req.body;
-    
+
     if (!opportunityId) {
       return res.status(400).json({ success: false, message: 'opportunityId is required' });
     }
@@ -76,7 +81,7 @@ exports.generateAIPlan = async (req, res, next) => {
 
     // Generate AI plan
     const aiPlan = await aiAnalysisService.generateExecutionPlan(profile, opportunity);
-    
+
     // Persist to database
     if (aiPlan && userId) {
       try {
@@ -95,23 +100,19 @@ exports.generateAIPlan = async (req, res, next) => {
     }
 
     // Return in frontend-compatible format
+    // FIXED: Always return weeks array; add message only for fallback
+    const isFallback = aiPlan.source === 'fallback';
     res.json({ 
       success: true, 
-      data: aiPlan ? {
-        weeks: [
-          { week: 1, focus: aiPlan.week_1?.focus, tasks: aiPlan.week_1?.tasks },
-          { week: 2, focus: aiPlan.week_2?.focus, tasks: aiPlan.week_2?.tasks },
-          { week: 3, focus: aiPlan.week_3?.focus, tasks: aiPlan.week_3?.tasks },
-          { week: 4, focus: aiPlan.week_4?.focus, tasks: aiPlan.week_4?.tasks }
-        ]
-      } : { 
-        message: 'AI plan unavailable. Using default roadmap.',
-        weeks: [
-          { week: 1, focus: 'Skill Assessment', tasks: ['Audit current skills', 'Identify gaps'] },
+      data: {
+        weeks: aiPlan.weeks || [
+          { week: 1, focus: 'Foundation', tasks: ['Audit current skills', 'Identify gaps'] },
           { week: 2, focus: 'Core Learning', tasks: ['Complete 2 courses', 'Build mini project'] },
           { week: 3, focus: 'Portfolio Building', tasks: ['Create 1 project', 'Publish on GitHub'] },
           { week: 4, focus: 'Job Market Entry', tasks: ['Apply to 10 roles', 'Network on LinkedIn'] }
-        ]
+        ],
+        milestones: aiPlan.milestones || [],
+        message: isFallback ? 'AI plan unavailable. Using default roadmap.' : undefined
       }
     });
   } catch (err) {
@@ -123,14 +124,14 @@ exports.getIncomeExplanation = async (req, res, next) => {
   try {
     const { opportunityId } = req.params;
     const opportunity = await opportunityModel.getById(opportunityId);
-    
+
     if (!opportunity) {
       return res.status(404).json({ success: false, message: 'Opportunity not found' });
     }
 
     const incomePotential = scoreCalculator.calculateIncomePotential(opportunity);
     const explanation = await aiAnalysisService.generateIncomeExplanation(opportunity, incomePotential);
-    
+
     res.json({ 
       success: true, 
       data: { 
