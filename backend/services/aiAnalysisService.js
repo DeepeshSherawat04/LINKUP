@@ -1,5 +1,6 @@
-// aiAnalysisService.js — FIXED v2.1
-// Fixes: model name, JSON extraction, fallback structure, quota handling
+// aiAnalysisService.js — FIXED v2.2
+// Fixes: model name -> gemini-1.5-flash-8b (free tier compatible)
+//        robust JSON extraction, fallback structure
 
 const genAI = require('../config/geminiClient');
 
@@ -8,9 +9,9 @@ const getModel = () => {
     console.log('❌ Gemini client not initialized');
     return null;
   }
-  // FIXED: use correct model name
+  // FIXED: use free-tier compatible model
   return genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash',
+    model: 'gemini-1.5-flash-8b',
     generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
   });
 };
@@ -41,7 +42,7 @@ const safeJSONParse = (text) => {
     }
   }
 
-  // Strategy 3: Greedy fallback (original behavior)
+  // Strategy 3: Greedy fallback
   const greedyMatch = text.match(/\{[\s\S]*\}/);
   if (greedyMatch) {
     try { return JSON.parse(greedyMatch[0]); } catch {}

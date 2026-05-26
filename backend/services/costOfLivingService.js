@@ -1,3 +1,4 @@
+//  Cost of Living Service
 const axios = require('axios');
 const { supabaseClient } = require('../config/supabaseClient');
 
@@ -64,7 +65,7 @@ class CostOfLivingService {
     const cached = await this._getCachedData(normalizedCity);
     if (cached && !this._isStale(cached.last_updated)) {
       console.log(`[CoL] Cache hit for ${normalizedCity}`);
-      return { ...cached.data, from_cache: true };
+      return { ...cached.data, rates: cached.data.rates || { from: 1.0, to: 1.0, currency: 'USD' }, from_cache: true };
     }
 
     // 2. Fetch live World Bank data for the country
@@ -80,7 +81,7 @@ class CostOfLivingService {
 
     // 3. If we have cached but stale data, return it with warning
     if (cached) {
-      return { ...cached.data, from_cache: true, stale: true };
+      return { ...cached.data, rates: cached.data.rates || { from: 1.0, to: 1.0, currency: 'USD' }, from_cache: true, stale: true };
     }
 
     // 4. Final fallback: estimation model based on country GDP
@@ -144,6 +145,7 @@ class CostOfLivingService {
       gdp_per_capita: gdpPerCapita,
       inflation_rate: inflation || 0,
       unemployment_rate: unemployment || 0,
+      rates: { from: 1.0, to: 1.0, currency: 'USD' },
       source: 'world_bank',
       fetched_at: new Date().toISOString(),
       data_quality: 'estimated_from_national_data',
@@ -200,6 +202,7 @@ class CostOfLivingService {
       gdp_per_capita: null,
       inflation_rate: null,
       unemployment_rate: null,
+      rates: { from: 1.0, to: 1.0, currency: 'USD' },
       source: 'estimation_model',
       fetched_at: new Date().toISOString(),
       data_quality: 'estimated',
