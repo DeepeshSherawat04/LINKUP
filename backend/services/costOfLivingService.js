@@ -57,7 +57,7 @@ class CostOfLivingService {
    * Get CoL data for ANY city user selects
    * Priority: 1) Live World Bank CPI by country → 2) Cached data → 3) Estimation model
    */
-  static async getCostOfLiving(cityName, countryName = null) {
+   static async getCostOfLiving(cityName, countryName = null) {
     const normalizedCity = this._normalizeCity(cityName);
     const normalizedCountry = countryName ? this._normalizeCountry(countryName) : this._inferCountry(normalizedCity);
     
@@ -65,7 +65,7 @@ class CostOfLivingService {
     const cached = await this._getCachedData(normalizedCity);
     if (cached && !this._isStale(cached.last_updated)) {
       console.log(`[CoL] Cache hit for ${normalizedCity}`);
-      return { ...data, from_cache: true };
+      return { ...cached.data, from_cache: true };   // ← FIXED: was `...data`
     }
 
     // 2. Fetch live World Bank data for the country
@@ -81,7 +81,7 @@ class CostOfLivingService {
 
     // 3. If we have cached but stale data, return it with warning
     if (cached) {
-      return { ...data, from_cache: true, stale: true };
+      return { ...cached.data, from_cache: true, stale: true };  // ← FIXED: was `...data`
     }
 
     // 4. Final fallback: estimation model based on country GDP
@@ -89,7 +89,6 @@ class CostOfLivingService {
     await this._cacheData(normalizedCity, estimated);
     return estimated;
   }
-
   /**
    * Fetch from World Bank API (completely free, no key needed)
    * Uses: CPI, GDP per capita, inflation, unemployment
