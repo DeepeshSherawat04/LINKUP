@@ -27,6 +27,11 @@ class IncomeSimulationService {
     return [startup, bigTech, remote];
   }
 
+    // Controller expects this method name
+  static async simulate(offerDetails, personalFinances) {
+    return this.buildScenarios(offerDetails, personalFinances);
+  }
+
   /* =====================================================================
      INPUT SANITIZATION — replaces the old _validateInputs that threw 500s
      ===================================================================== */
