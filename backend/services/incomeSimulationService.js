@@ -22,7 +22,7 @@ class IncomeSimulationService {
 
     // 3. Build canonical scenarios (same shape the frontend expects)
     const startup = this._buildStartupScenario(inputs, monthlyFixed, taxRate, marketRate, safeCol);
-    const bigTech = this._buildBigTechScenario(inputs, monthlyFixed, taxRate, marketRate, col);
+    const bigTech = this._buildBigTechScenario(inputs, monthlyFixed, taxRate, marketRate, safeCol);
     const remote = this._buildRemoteScenario(inputs, monthlyFixed, taxRate, marketRate, safeCol);
 
     return [startup, bigTech, remote];

@@ -31,6 +31,9 @@ const arbitrageRoutes = require('./routes/arbitrageRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ─── PROXY TRUST (required for accurate rate-limiting behind Render/nginx) ───
+app.set('trust proxy', 1);
+
 // ─── MIDDLEWARE ───
 app.use(helmet());
 app.use(cors());
@@ -49,7 +52,6 @@ app.use('/api/referrals', referralRoutes);
 app.use('/api/income', incomeRoutes);
 app.use('/api/arbitrage', arbitrageRoutes);
 
-// ─── HEALTH CHECK ──_
 // ─── HEALTH CHECKS ───
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', service: 'linkup-server' });
