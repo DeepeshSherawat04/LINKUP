@@ -1,7 +1,6 @@
 //  Cost of Living Service
 const axios = require('axios');
-const supabaseModule = require('../config/supabaseClient');
-const supabaseClient = supabaseModule.supabaseClient || supabaseModule.default || supabaseModule;
+const supabaseClient = require('../config/supabaseClient');  // FIXED: default export, not destructured
 
 /**
  * Real Cost of Living Service
@@ -66,7 +65,7 @@ class CostOfLivingService {
     const cached = await this._getCachedData(normalizedCity);
     if (cached && !this._isStale(cached.last_updated)) {
       console.log(`[CoL] Cache hit for ${normalizedCity}`);
-      return { ...cached.data, from_cache: true };
+      return { ...data, from_cache: true };
     }
 
     // 2. Fetch live World Bank data for the country
@@ -82,7 +81,7 @@ class CostOfLivingService {
 
     // 3. If we have cached but stale data, return it with warning
     if (cached) {
-      return { ...cached.data, from_cache: true, stale: true };
+      return { ...data, from_cache: true, stale: true };
     }
 
     // 4. Final fallback: estimation model based on country GDP
